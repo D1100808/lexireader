@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="ru" data-theme="sepia">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>LexiReader</title>
+  <meta name="description" content="Читалка книг на иностранных языках со словарями-карточками по главам">
+  <meta name="theme-color" content="#f4ecd8">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/favicon-32.png" sizes="32x32">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <!-- iPhone: установка на экран «Домой» -->
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="LexiReader">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Основное окно -->
+  <header class="topbar">
+    <div class="brand">📖 <span>LexiReader</span></div>
+    <nav class="tabs">
+      <button class="tab active" data-view="library"><span class="t-full">Библиотека</span><span class="t-short">Книги</span></button>
+      <button class="tab" data-view="vocab">Словари</button>
+      <button class="tab" data-view="notes">Заметки</button>
+      <button class="tab" data-view="review"><span class="t-full">Повторение</span><span class="t-short">Повтор</span> <span id="dueBadge" class="badge hidden"></span></button>
+    </nav>
+    <button id="settingsBtn" class="icon-btn" title="Настройки">⚙</button>
+  </header>
+
+  <main class="main">
+    <section id="view-library" class="view active">
+      <div class="view-head">
+        <h1>Мои книги</h1>
+        <label class="btn primary">＋ Добавить книгу
+          <input type="file" id="fileInput" multiple hidden
+                 accept=".epub,.pdf,.fb2,.zip,.docx,.txt,.html,.htm,.xhtml,.md,.markdown">
+        </label>
+      </div>
+      <p class="muted small formats">Форматы: <b>EPUB</b>, <b>PDF</b>, <b>FB2</b>, <b>FB2.ZIP</b>, <b>DOCX</b>, <b>TXT</b>, <b>HTML</b>, <b>Markdown</b>. Можно перетащить файлы прямо в окно.</p>
+      <div id="bookGrid" class="book-grid"></div>
+    </section>
+    <section id="view-vocab" class="view"><div id="vocabRoot"></div></section>
+    <section id="view-notes" class="view"><div id="notesRoot"></div></section>
+    <section id="view-review" class="view"><div id="reviewRoot"></div></section>
+  </main>
+
+  <!-- Читалка -->
+  <div id="reader" class="reader hidden">
+    <header class="reader-bar">
+      <button id="rBack" class="icon-btn" title="В библиотеку">←</button>
+      <button id="rToc" class="icon-btn" title="Оглавление">☰</button>
+      <div class="r-title">
+        <div id="rBookTitle" class="ellipsis"></div>
+        <div id="rChapterTitle" class="muted small ellipsis"></div>
+      </div>
+      <button id="rZoomOut" class="icon-btn pdf-only" title="Уменьшить">−</button>
+      <button id="rZoomIn" class="icon-btn pdf-only" title="Увеличить">＋</button>
+      <button id="rListen" class="icon-btn" title="Читать вслух">🎧</button>
+      <button id="rNotes" class="icon-btn" title="Заметки книги">🗒️</button>
+      <button id="rWords" class="icon-btn" title="Слова книги">🗂</button>
+      <button id="rAa" class="icon-btn" title="Оформление">Aa</button>
+    </header>
+    <aside id="tocPanel" class="side-panel left hidden"></aside>
+    <aside id="wordsPanel" class="side-panel right hidden"></aside>
+    <aside id="notesPanel" class="side-panel right hidden"></aside>
+    <div id="rScroll" class="r-scroll">
+      <article id="rContent" class="r-content"></article>
+    </div>
+    <button id="rBackLink" class="btn back-link hidden">↩ Назад</button>
+    <footer class="reader-foot">
+      <button id="rPrev" class="btn ghost sm">‹ <span class="hide-sm">Пред. глава</span></button>
+      <div class="foot-mid">
+        <div class="progress thin"><div id="rProgressBar"></div></div>
+        <span id="rProgressText" class="muted small"></span>
+      </div>
+      <button id="rNext" class="btn ghost sm"><span class="hide-sm">След. глава</span> ›</button>
+    </footer>
+  </div>
+
+  <div id="selPopup" class="sel-popup hidden"></div>
+  <div id="modal" class="modal hidden"><div id="modalCard" class="modal-card"></div></div>
+  <div id="loading" class="loading hidden"><div class="spinner"></div><div id="loadingText"></div></div>
+  <div class="drop-hint">Отпустите файлы, чтобы добавить книги</div>
+  <div id="toast" class="toast"></div>
+  <div id="eyeWarm" class="eye-filter warm"></div>
+  <div id="eyeDim" class="eye-filter dim"></div>
+
+  <script src="vendor/pdf.min.js"></script>
+  <script>
+    // При открытии файла напрямую (file://) браузер не даёт запустить Web Worker — грузим PDF-движок в основной поток.
+    if (location.protocol === 'file:') document.write('<script src="vendor/pdf.worker.min.js"><\/script>');
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+  </script>
+  <script src="vendor/jszip.min.js"></script>
+  <script src="vendor/mammoth.browser.min.js"></script>
+  <script src="js/util.js"></script>
+  <script src="js/platform.js"></script>
+  <script src="js/db.js"></script>
+  <script src="js/parsers.js"></script>
+  <script src="js/dict.js"></script>
+  <script src="js/cards.js"></script>
+  <script src="js/notes.js"></script>
+  <script src="js/speech.js"></script>
+  <script src="js/reader.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
